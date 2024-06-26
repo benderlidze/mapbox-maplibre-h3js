@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maplibre with H3.js Example</title>
+    <!-- Maplibre GL JS CSS -->
+    <link href='https://unpkg.com/maplibre-gl@2.1.9/dist/maplibre-gl.css' rel='stylesheet' />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            z-index: 1;
+            border-radius: 3px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="controls">
+        <label for="resolution">H3 Resolution: </label>
+        <select id="resolution">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7" selected>7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+        </select>
+    </div>
+    <!-- Maplibre GL JS -->
+    <script src='https://unpkg.com/maplibre-gl@2.1.9/dist/maplibre-gl.js'></script>
+    <!-- H3.js -->
+    <script src='https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js'></script>
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map', // container ID
+            style: {
+                version: 8,
+                sources: {
+                    'osm-tiles': {
+                        type: 'raster',
+                        tiles: [
+                            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm-tiles',
+                        type: 'raster',
+                        source: 'osm-tiles',
+                        minzoom: 0,
+                        maxzoom: 19
+                    }
+                ]
+            },
+            center: [-122.4194, 37.7749], // starting position [lng, lat] (San Francisco)
+            zoom: 10 // starting zoom
+        });
+
+        const bbox = [-123.0, 37.6, -122.0, 38.0];
+
+        function updateHexagons(resolution) {
+            const hexagons = h3.polyfill([
+                [bbox[1], bbox[0]], // southwest corner
+                [bbox[3], bbox[0]], // northwest corner
+                [bbox[3], bbox[2]], // northeast corner
+                [bbox[1], bbox[2]]  // southeast corner
+            ], resolution);
+
+            const hexFeatures = hexagons.map(hex => {
+                const hexBoundary = h3.h3ToGeoBoundary(hex, true);
+                return {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [hexBoundary]
+                    },
+                    properties: {
+                        h3Index: hex
+                    }
+                };
+            });
+
+            const hexGeoJSON = {
+                type: 'FeatureCollection',
+                features: hexFeatures
+            };
+
+            // Add or update hexagons layer on the map
+            if (map.getSource('hexagons')) {
+                map.getSource('hexagons').setData(hexGeoJSON);
+            } else {
+                map.addSource('hexagons', {
+                    type: 'geojson',
+                    data: hexGeoJSON
+                });
+
+                map.addLayer({
+                    id: 'hexagons-layer',
+                    type: 'fill',
+                    source: 'hexagons',
+                    layout: {},
+                    paint: {
+                        'fill-color': '#088',
+                        'fill-opacity': 0.4
+                    }
+                });
+            }
+        }
+
+        document.getElementById('resolution').addEventListener('change', (event) => {
+            const resolution = parseInt(event.target.value);
+            updateHexagons(resolution);
+        });
+
+        map.on('load', () => {
+            const initialResolution = parseInt(document.getElementById('resolution').value);
+            updateHexagons(initialResolution);
+        });
+    </script>
+</body>
+
+</html>
